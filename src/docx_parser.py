@@ -1,5 +1,5 @@
-# src/docx_parser_v2.py
-"""Module trích xuất dữ liệu từ file DOCX - Version 2 với error handling"""
+# src/docx_parser.py
+"""Module trích xuất dữ liệu từ file DOCX - FIXED VERSION"""
 
 import re
 from typing import Dict, Any, Optional
@@ -10,27 +10,21 @@ def parse_number(text: str) -> float:
     """Parse chuỗi số về float"""
     if not text or text == "":
         return 0.0
-    
     try:
-        # Loại bỏ dấu chấm (phân cách hàng nghìn)
-        # Thay dấu phẩy (phân cách thập phân) thành dấu chấm
         cleaned = str(text).replace(".", "").replace(",", ".")
         return float(cleaned)
     except (ValueError, AttributeError):
         return 0.0
 
 
-class DocxParserV2:
-    """Class parse DOCX với error handling tốt hơn"""
+class DocxParser:
+    """Class parse DOCX"""
     
     def __init__(self, file_path: str):
         """Khởi tạo parser"""
-        try:
-            self.doc = Document(file_path)
-            self.paragraphs = [p.text.strip() for p in self.doc.paragraphs if p.text.strip()]
-            self.text_content = "\n".join(self.paragraphs)
-        except Exception as e:
-            raise Exception(f"Không thể đọc file DOCX: {str(e)}")
+        self.doc = Document(file_path)
+        self.paragraphs = [p.text.strip() for p in self.doc.paragraphs if p.text.strip()]
+        self.text_content = "\n".join(self.paragraphs)
     
     def extract_customer_info(self) -> Dict[str, str]:
         """Trích xuất thông tin khách hàng"""
@@ -39,41 +33,32 @@ class DocxParserV2:
         address = ""
         phone = ""
         
-        try:
-            found_first = False
-            
-            for para in self.paragraphs:
-                # Tìm người đầu tiên
-                if not found_first and "1. Họ và tên:" in para:
-                    match = re.search(r'1\.\s*Họ và tên:\s*([^-\n]+)', para)
-                    if match:
-                        name = match.group(1).strip()
-                        found_first = True
-                
-                # CCCD của người đầu tiên
-                if found_first and not cccd and "CMND/CCCD" in para:
-                    match = re.search(r'(?:CMND/CCCD)[^:]*:\s*(\d{9,12})', para)
-                    if match:
-                        cccd = match.group(1).strip()
-                
-                # Địa chỉ
-                if found_first and not address and "Nơi cư trú:" in para:
-                    parts = para.split("Nơi cư trú:", 1)
-                    if len(parts) > 1:
-                        address = parts[1].strip()
-                
-                # Số điện thoại
-                if found_first and not phone and "Số điện thoại:" in para:
-                    match = re.search(r'Số điện thoại:\s*(\d{10,11})', para)
-                    if match:
-                        phone = match.group(1).strip()
-                
-                # Dừng khi gặp người thứ 2
-                if found_first and "2. Họ và tên:" in para:
-                    break
+        found_first = False
         
-        except Exception as e:
-            print(f"Warning in extract_customer_info: {e}")
+        for para in self.paragraphs:
+            if not found_first and "1. Họ và tên:" in para:
+                match = re.search(r'1\.\s*Họ và tên:\s*([^-\n]+)', para)
+                if match:
+                    name = match.group(1).strip()
+                    found_first = True
+            
+            if found_first and not cccd and "CMND/CCCD" in para:
+                match = re.search(r'(?:CMND/CCCD)[^:]*:\s*(\d{9,12})', para)
+                if match:
+                    cccd = match.group(1).strip()
+            
+            if found_first and not address and "Nơi cư trú:" in para:
+                parts = para.split("Nơi cư trú:", 1)
+                if len(parts) > 1:
+                    address = parts[1].strip()
+            
+            if found_first and not phone and "Số điện thoại:" in para:
+                match = re.search(r'Số điện thoại:\s*(\d{10,11})', para)
+                if match:
+                    phone = match.group(1).strip()
+            
+            if found_first and "2. Họ và tên:" in para:
+                break
         
         return {
             'name': name if name else 'Khách hàng',
@@ -91,46 +76,36 @@ class DocxParserV2:
         loan_term = 60
         purpose = "Kinh doanh"
         
-        try:
-            for para in self.paragraphs:
-                # Tổng nhu cầu vốn
-                if "1. Tổng nhu cầu vốn:" in para:
-                    match = re.search(r'Tổng nhu cầu vốn:\s*([\d.,]+)', para)
-                    if match:
-                        total_need = parse_number(match.group(1))
-                
-                # Vốn đối ứng
-                if "Vốn đối ứng tham gia" in para:
-                    match = re.search(r':\s*([\d.,]+)', para)
-                    if match:
-                        equity = parse_number(match.group(1))
-                
-                # Vốn vay
-                if "Vốn vay Agribank số tiền:" in para:
-                    match = re.search(r'số tiền:\s*([\d.,]+)', para)
-                    if match:
-                        loan_amount = parse_number(match.group(1))
-                
-                # Mục đích vay
-                if "Mục đích vay:" in para:
-                    parts = para.split("Mục đích vay:", 1)
-                    if len(parts) > 1:
-                        purpose = parts[1].strip()
-                
-                # Thời hạn
-                if "Thời hạn vay:" in para:
-                    match = re.search(r'Thời hạn vay:\s*(\d+)\s*tháng', para)
-                    if match:
-                        loan_term = int(match.group(1))
-                
-                # Lãi suất
-                if "Lãi suất:" in para and "Thời hạn vay:" in para:
-                    match = re.search(r'Lãi suất:\s*(\d+[.,]?\d*)\s*%', para)
-                    if match:
-                        interest_rate = float(match.group(1).replace(',', '.'))
-        
-        except Exception as e:
-            print(f"Warning in extract_loan_info: {e}")
+        for para in self.paragraphs:
+            if "1. Tổng nhu cầu vốn:" in para:
+                match = re.search(r'Tổng nhu cầu vốn:\s*([\d.,]+)', para)
+                if match:
+                    total_need = parse_number(match.group(1))
+            
+            if "Vốn đối ứng tham gia" in para:
+                match = re.search(r':\s*([\d.,]+)', para)
+                if match:
+                    equity = parse_number(match.group(1))
+            
+            if "Vốn vay Agribank số tiền:" in para:
+                match = re.search(r'số tiền:\s*([\d.,]+)', para)
+                if match:
+                    loan_amount = parse_number(match.group(1))
+            
+            if "Mục đích vay:" in para:
+                parts = para.split("Mục đích vay:", 1)
+                if len(parts) > 1:
+                    purpose = parts[1].strip()
+            
+            if "Thời hạn vay:" in para:
+                match = re.search(r'Thời hạn vay:\s*(\d+)\s*tháng', para)
+                if match:
+                    loan_term = int(match.group(1))
+            
+            if "Lãi suất:" in para and "Thời hạn vay:" in para:
+                match = re.search(r'Lãi suất:\s*(\d+[.,]?\d*)\s*%', para)
+                if match:
+                    interest_rate = float(match.group(1).replace(',', '.'))
         
         equity_ratio = (equity / total_need * 100) if total_need > 0 else 0
         
@@ -153,48 +128,39 @@ class DocxParserV2:
         ltv = 70.0
         legal_docs = ""
         
-        try:
-            in_collateral = False
-            
-            for para in self.paragraphs:
-                if "5. Tài sản bảo đảm" in para:
-                    in_collateral = True
-                    continue
-                
-                if in_collateral:
-                    # Tài sản 1
-                    if "Tài sản 1:" in para:
-                        match = re.search(r'Tài sản 1:\s*([^\.]+)', para)
-                        if match:
-                            asset_type = match.group(1).strip()
-                        
-                        if "Giá trị:" in para:
-                            match = re.search(r'Giá trị:\s*([\d.,]+)', para)
-                            if match:
-                                market_value = parse_number(match.group(1))
-                    
-                    # Địa chỉ TS
-                    if in_collateral and "Địa chỉ:" in para:
-                        parts = para.split("Địa chỉ:", 1)
-                        if len(parts) > 1:
-                            asset_address = parts[1].strip()
-                    
-                    # LTV
-                    if "LTV" in para or "Tỷ lệ cho vay" in para:
-                        match = re.search(r'(\d+[.,]?\d*)\s*%', para)
-                        if match:
-                            ltv = float(match.group(1).replace(',', '.'))
-                    
-                    # Giấy CN
-                    if "Giấy chứng nhận" in para:
-                        legal_docs = para
-                    
-                    # Dừng khi gặp phần III
-                    if "III." in para:
-                        break
+        in_collateral = False
         
-        except Exception as e:
-            print(f"Warning in extract_collateral_info: {e}")
+        for para in self.paragraphs:
+            if "5. Tài sản bảo đảm" in para:
+                in_collateral = True
+                continue
+            
+            if in_collateral:
+                if "Tài sản 1:" in para:
+                    match = re.search(r'Tài sản 1:\s*([^\.]+)', para)
+                    if match:
+                        asset_type = match.group(1).strip()
+                    
+                    if "Giá trị:" in para:
+                        match = re.search(r'Giá trị:\s*([\d.,]+)', para)
+                        if match:
+                            market_value = parse_number(match.group(1))
+                
+                if in_collateral and "Địa chỉ:" in para:
+                    parts = para.split("Địa chỉ:", 1)
+                    if len(parts) > 1:
+                        asset_address = parts[1].strip()
+                
+                if "LTV" in para or "Tỷ lệ cho vay" in para:
+                    match = re.search(r'(\d+[.,]?\d*)\s*%', para)
+                    if match:
+                        ltv = float(match.group(1).replace(',', '.'))
+                
+                if "Giấy chứng nhận" in para:
+                    legal_docs = para
+                
+                if "III." in para:
+                    break
         
         return {
             'asset_type': asset_type,
@@ -210,22 +176,16 @@ class DocxParserV2:
         monthly_expense = 0.0
         other_debt = 0.0
         
-        try:
-            for para in self.paragraphs:
-                # Tổng thu nhập
-                if "Tổng thu nhập" in para and "tháng" in para.lower():
-                    match = re.search(r':\s*([\d.,]+)', para)
-                    if match:
-                        monthly_income = parse_number(match.group(1))
-                
-                # Tổng chi phí
-                if "Tổng chi phí hàng tháng:" in para:
-                    match = re.search(r':\s*([\d.,]+)', para)
-                    if match:
-                        monthly_expense = parse_number(match.group(1))
-        
-        except Exception as e:
-            print(f"Warning in extract_financial_info: {e}")
+        for para in self.paragraphs:
+            if "Tổng thu nhập" in para and "tháng" in para.lower():
+                match = re.search(r':\s*([\d.,]+)', para)
+                if match:
+                    monthly_income = parse_number(match.group(1))
+            
+            if "Tổng chi phí hàng tháng:" in para:
+                match = re.search(r':\s*([\d.,]+)', para)
+                if match:
+                    monthly_expense = parse_number(match.group(1))
         
         return {
             'monthly_income': monthly_income,
