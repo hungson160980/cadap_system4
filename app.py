@@ -176,9 +176,16 @@ def render_sidebar():
                     
                     try:
                         # Parse file
+                      
                         parser = DocxParser(tmp_path)
                         parsed_data = parser.parse_full_document()
-                        
+
+                        # === DEBUG ===
+st.write("🔍 KIỂM TRA DỮ LIỆU ĐÃ PARSE:")
+st.write(f"Tên: {parsed_data['customer_info']['name']}")
+st.write(f"CCCD: {parsed_data['customer_info']['cccd']}")
+st.write(f"Tổng nhu cầu: {parsed_data['loan_info']['total_need']}")
+st.json(parsed_data)
                         # Cập nhật session state
                         st.session_state.customer_info = parsed_data['customer_info']
                         st.session_state.loan_info = parsed_data['loan_info']
