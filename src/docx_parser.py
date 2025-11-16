@@ -281,4 +281,3 @@ class DocxParser:
             'financial_info': financial_info,
             'raw_text': self.text_content
         }
-
